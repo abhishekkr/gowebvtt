@@ -6,6 +6,25 @@
 
 * To parse use `gowebvtt.ParseFile(..)`
 
+* Example usage with Options
+
+```
+package main
+
+import (
+        "github.com/abhishekkr/gowebvtt"
+)
+
+func main() {
+        vttOpts := gowebvtt.VttOptions{Enabled: true, MaxLinesPerScene: 2}
+        vtt, err := gowebvtt.ParseFileWithOptions("sample.vtt", vttOpts)
+        if errVtt != nil {
+                panic(errVtt)
+        }
+        gowebvtt.Println(vtt)
+}
+```
+
 ---
 
 ### ToDo
