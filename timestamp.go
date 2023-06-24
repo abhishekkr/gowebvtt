@@ -83,3 +83,24 @@ func parseSMsToMillisec(s_ms []string) (uint64, error) {
 	}
 	return (Sec * 1000) + Msec, nil
 }
+
+func MillsecToVTTTimeString(ms uint64) string {
+	seconds := uint64(ms / 1000)
+	minutes := uint64(seconds / 60)
+	hours := uint64(minutes / 60)
+	if hours < 1 {
+		return fmt.Sprintf(
+			"%02d:%02d.%03d",
+			minutes%60,
+			seconds%60,
+			ms%1000,
+		)
+	}
+	return fmt.Sprintf(
+		"%02d:%02d:%02d.%03d",
+		hours,
+		minutes%60,
+		seconds%60,
+		ms%1000,
+	)
+}

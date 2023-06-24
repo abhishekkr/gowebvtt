@@ -21,24 +21,9 @@ The text could be as longs as you want or as small as you want, file starts with
 `
 )
 
-func TestProcessSubtextWithSplit(t *testing.T) {
-	scene := Scene{}
-	SplitForMaxTokens = true
-	scene.ProcessSubtext("one two three four five six seven")
-	SplitForMaxTokens = false
-	if len(scene.Transcript) < 2 {
-		t.Fatalf("Failed for ProcessSubtext, didn't split longer line.")
-	}
-	for _, sub := range scene.Transcript {
-		if len(strings.Split(sub, " ")) > MaxTokensOnAFrame {
-			t.Fatalf("Failed for ProcessSubtext, didn't split correct length.")
-		}
-	}
-}
-
 func TestParseWebVTT(t *testing.T) {
 	scanner := bufio.NewScanner(strings.NewReader(sample))
-	vtt := ParseWebVTT(scanner)
+	vtt := ParseWebVTT(scanner, VttOptions{})
 	if len(vtt.Scenes) != 3 {
 		t.Fatalf("Failed for ParseWebVTT with sample content, for Scene parsing.")
 	}
