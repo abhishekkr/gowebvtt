@@ -39,11 +39,21 @@ func TestProcessSubtextWithSplit(t *testing.T) {
 func TestParseWebVTT(t *testing.T) {
 	scanner := bufio.NewScanner(strings.NewReader(sample))
 	vtt := ParseWebVTT(scanner)
-	subs := vtt.Scenes[1] // 0th 2nd 4th index have non-sub scenes
-	if subs.StartMilliSec != 1000 || subs.EndMilliSec != 4000 {
+	if len(vtt.Scenes) != 3 {
+		t.Fatalf("Failed for ParseWebVTT with sample content, for Scene parsing.")
+	}
+	subs1 := vtt.Scenes[0]
+	if subs1.StartMilliSec != 1000 || subs1.EndMilliSec != 4000 {
 		t.Fatalf("Failed for ParseWebVTT with sample content, for time parsing.")
 	}
-	if subs.Transcript[0] != "This is subtitle at 1sec to 4sec." {
+	if subs1.Transcript[0] != "This is subtitle at 1sec to 4sec." {
+		t.Fatalf("Failed for ParseWebVTT with sample content, for transcript.")
+	}
+	subs2 := vtt.Scenes[1]
+	if subs2.StartMilliSec != 5000 || subs2.EndMilliSec != 9000 {
+		t.Fatalf("Failed for ParseWebVTT with sample content, for time parsing.")
+	}
+	if len(subs2.Transcript) != 2 {
 		t.Fatalf("Failed for ParseWebVTT with sample content, for transcript.")
 	}
 	if String(vtt) != sample {

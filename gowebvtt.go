@@ -3,9 +3,9 @@ package gowebvtt
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -19,12 +19,6 @@ type Scene struct {
 	Transcript    []string
 }
 
-const (
-	TS_HMSMs uint8 = iota
-	TS_MSMs
-	TS_SMs
-)
-
 var (
 	MaxTokensOnAFrame = 5
 	SplitForMaxTokens = false
@@ -33,71 +27,39 @@ var (
 var (
 	RegHeader    = regexp.MustCompile("^\\s*WEBVTT\\s*")
 	RegNote      = regexp.MustCompile("^\\s*NOTE\\s")
-	RegTimestamp = regexp.MustCompile("^\\s*[0-9\\:\\.]+\\s*[\\-]+>\\s*[0-9\\:\\.]+\\s*$")
-	RegTimeHMSMs = regexp.MustCompile("\\s*([0-9]+)\\:([0-9]+)\\:([0-9]+)\\.([0-9]+)\\s*")
-	RegTimeMSMs  = regexp.MustCompile("\\s*([0-9]+)\\:([0-9]+)\\.([0-9]+)\\s*")
-	RegTimeSMs   = regexp.MustCompile("\\s*([0-9]+)\\.([0-9]+)\\s*")
+	RegTimestamp = regexp.MustCompile("^\\s*[0-9\\:\\.]+\\s+\\-+>\\s+[0-9\\:\\.]+\\s*$")
 )
 
-func getTimeRangeTokens(txt string) (uint8, [][]string) {
-	if RegTimeHMSMs.MatchString(txt) {
-		return TS_HMSMs, RegTimeHMSMs.FindAllStringSubmatch(txt, -1)
-	} else if RegTimeMSMs.MatchString(txt) {
-		return TS_MSMs, RegTimeMSMs.FindAllStringSubmatch(txt, -1)
+func (vtt *VTT) AppendScene(scene Scene) bool {
+	if len(scene.Transcript) == 0 || (scene.EndMilliSec-scene.StartMilliSec == 0) {
+		return false
 	}
-	return TS_SMs, RegTimeSMs.FindAllStringSubmatch(txt, -1)
+	vtt.Scenes = append(vtt.Scenes, scene)
+	return true
 }
 
-func getTimeRange(txt string) (start, end uint64) {
-	tsType, timeSubstr := getTimeRangeTokens(txt)
-	if tsType == TS_HMSMs {
-		startHr, _ := strconv.ParseUint(timeSubstr[0][1], 10, 64)
-		startMin, _ := strconv.ParseUint(timeSubstr[0][2], 10, 64)
-		startSec, _ := strconv.ParseUint(timeSubstr[0][3], 10, 64)
-		startMsec, _ := strconv.ParseUint(timeSubstr[0][4], 10, 64)
-		start = (((startHr * 3600) + (startMin * 60) + startSec) * 1000) + startMsec
-
-		endHr, _ := strconv.ParseUint(timeSubstr[1][1], 10, 64)
-		endMin, _ := strconv.ParseUint(timeSubstr[1][2], 10, 64)
-		endSec, _ := strconv.ParseUint(timeSubstr[1][3], 10, 64)
-		endMsec, _ := strconv.ParseUint(timeSubstr[1][4], 10, 64)
-		end = (((endHr * 3600) + (endMin * 60) + endSec) * 1000) + endMsec
-	} else if tsType == TS_MSMs {
-		startMin, _ := strconv.ParseUint(timeSubstr[0][1], 10, 64)
-		startSec, _ := strconv.ParseUint(timeSubstr[0][2], 10, 64)
-		startMsec, _ := strconv.ParseUint(timeSubstr[0][3], 10, 64)
-		start = (((startMin * 60) + startSec) * 1000) + startMsec
-
-		endMin, _ := strconv.ParseUint(timeSubstr[1][1], 10, 64)
-		endSec, _ := strconv.ParseUint(timeSubstr[1][2], 10, 64)
-		endMsec, _ := strconv.ParseUint(timeSubstr[1][3], 10, 64)
-		end = (((endMin * 60) + endSec) * 1000) + endMsec
-	} else if tsType == TS_SMs {
-		startSec, _ := strconv.ParseUint(timeSubstr[0][1], 10, 64)
-		startMsec, _ := strconv.ParseUint(timeSubstr[0][2], 10, 64)
-		start = (startSec * 1000) + startMsec
-
-		endSec, _ := strconv.ParseUint(timeSubstr[1][1], 10, 64)
-		endMsec, _ := strconv.ParseUint(timeSubstr[1][2], 10, 64)
-		end = (endSec * 1000) + endMsec
+func (scene *Scene) AppendTranscript(line string) bool {
+	if len(line) == 0 {
+		return false
 	}
-	return
+	scene.Transcript = append(scene.Transcript, line)
+	return true
 }
 
 func (scene *Scene) ProcessSubtext(line string) {
 	if !SplitForMaxTokens {
-		scene.Transcript = append(scene.Transcript, line)
+		scene.AppendTranscript(line)
 		return
 	}
 	words := strings.Split(strings.Trim(line, " "), " ")
 	var idx int
 	for idx = 0; idx+MaxTokensOnAFrame < len(words); idx += MaxTokensOnAFrame {
 		tmpTxt := strings.Join(words[idx:idx+MaxTokensOnAFrame], " ")
-		scene.Transcript = append(scene.Transcript, tmpTxt)
+		scene.AppendTranscript(tmpTxt)
 	}
 	if idx < len(words) {
 		tmpTxt := strings.Join(words[idx:len(words)], " ")
-		scene.Transcript = append(scene.Transcript, tmpTxt)
+		scene.AppendTranscript(tmpTxt)
 	}
 }
 
@@ -122,7 +84,7 @@ func ParseWebVTT(fileScanner *bufio.Scanner) VTT {
 				isNote = false
 			} else if isSubtext {
 				isSubtext = false
-				vtt.Scenes = append(vtt.Scenes, scene)
+				vtt.AppendScene(scene)
 				prevEndMilliSec = scene.EndMilliSec
 				scene = Scene{StartMilliSec: 0, EndMilliSec: 0, Transcript: []string{}}
 			}
@@ -132,10 +94,14 @@ func ParseWebVTT(fileScanner *bufio.Scanner) VTT {
 		} else if isSubtext {
 			scene.ProcessSubtext(line)
 		} else if RegTimestamp.MatchString(line) {
-			scene.StartMilliSec, scene.EndMilliSec = getTimeRange(line)
+			var errTimeRange error
+			scene.StartMilliSec, scene.EndMilliSec, errTimeRange = getTimeRange(line)
+			if errTimeRange != nil {
+				log.Printf("TimeRange parsing failed: %v", errTimeRange)
+			}
 			if scene.StartMilliSec-prevEndMilliSec > 50 {
 				muteScene = Scene{StartMilliSec: prevEndMilliSec, EndMilliSec: scene.StartMilliSec}
-				vtt.Scenes = append(vtt.Scenes, muteScene)
+				vtt.AppendScene(muteScene)
 			}
 			isSubtext = true
 		}
@@ -158,16 +124,24 @@ func ParseFile(filepath string) VTT {
 }
 
 func MillsecToVTTTimeString(ms uint64) string {
-	totalSeconds := uint64(ms / 1000)
-	totalMinutes := uint64(totalSeconds / 60)
-	hours := uint64(totalMinutes / 60)
-	minutes := totalMinutes - (hours * 60)
-	seconds := totalSeconds - (totalMinutes * 60)
-	fraction := ms - (totalSeconds * 1000)
-	if hours > 0 {
-		return fmt.Sprintf("%02d:%02d:%02d.%03d", hours, minutes, seconds, fraction)
+	seconds := uint64(ms / 1000)
+	minutes := uint64(seconds / 60)
+	hours := uint64(minutes / 60)
+	if hours < 1 {
+		return fmt.Sprintf(
+			"%02d:%02d.%03d",
+			minutes%60,
+			seconds%60,
+			ms%1000,
+		)
 	}
-	return fmt.Sprintf("%02d:%02d.%03d", minutes, seconds, fraction)
+	return fmt.Sprintf(
+		"%02d:%02d:%02d.%03d",
+		hours,
+		minutes%60,
+		seconds%60,
+		ms%1000,
+	)
 }
 
 func String(vtt VTT) string {
